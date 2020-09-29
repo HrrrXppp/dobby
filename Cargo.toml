@@ -1,0 +1,13 @@
+[package]
+name = "dobby"
+version = "0.1.0"
+authors = ["Khrunov Evgeniy <hrrrxppp@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+num_cpus = "1.0"
+nix = "0.16.1"
+posixmq = "0.2.0"
+libloading = "0.5"
+shared_memory = "0.10.0"
+rustc-serialize = "0.3.24"
