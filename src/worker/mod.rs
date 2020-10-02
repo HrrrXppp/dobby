@@ -18,8 +18,8 @@ impl <'worker_lf> Worker{
 
     pub fn new( file_settings_name: &str ) -> Worker {
         let new_settings = Settings::new( file_settings_name );
-        let new_route_rules = Router::new( &new_settings.get( &"route_rules_file_name".to_string() ) );
-        let new_executor = Executor::new( &new_settings.get( &"executor_rules_file_name".to_string() ) );
+        let new_route_rules = Router::new( &new_settings.get( "route_rules_file_name" ) );
+        let new_executor = Executor::new( &new_settings.get( "executor_rules_file_name" ) );
         return Worker{ settings: new_settings,
                        route_rules: new_route_rules,
                        executor: new_executor };
@@ -50,7 +50,7 @@ impl <'worker_lf> Worker{
         let func = real_message.0.to_lowercase();
         let args = real_message.1.to_lowercase();
         println!(  "    func, args {} {}", func, args );
-        let action = self.route_rules.get_option( &func.to_string() );
+        let action = self.route_rules.get_option( &func );
         if None == action {
             println!(  "    Action is None" );
             return ( self.get_file( &self.settings.get( &Worker::ERROR_404_FILE_NAME ) ),
@@ -66,29 +66,27 @@ impl <'worker_lf> Worker{
         println!( "    result in process_get is {}", answer );
         return ( answer, Worker::OK_200_STATUS_LINE.to_string() );
     }
+
+    fn error_404( &self ) -> ( String, String ){
+        return ( self.get_file( &self.settings.get( &Worker::ERROR_404_FILE_NAME ) ),
+        Worker::ERROR_404_STATUS_LINE.to_string() );
+    } 
 }
 
 impl Process for Worker{
     fn process_message( &mut self, message: &str ) -> ( String, String ) {        
         println!(  "process_message {}", message );
-        let caption = &message[..3];
+        let caption = &message[..4];
         println!(  "Caption {}", caption );
         match caption {
-           "GET" => return self.process_get( &message[3..] ),
-           "RUN" => {
+           "GET " | "POST" => return self.process_get( &message[3..] ),
+           "RUN " => {
                println!( "RUN" );
-               return ( self.get_file( &self.settings.get( &Worker::ERROR_404_FILE_NAME ) ),
-                        Worker::ERROR_404_STATUS_LINE.to_string() );
-           },
-           "POST" => {
-               println!( "POST possible" );
-               return ( self.get_file( &self.settings.get( &Worker::ERROR_404_FILE_NAME ) ),
-                        Worker::ERROR_404_STATUS_LINE.to_string() );
+               return self.error_404();
            },
            _ => {
                println!( "something else!" );
-               return ( self.get_file( &self.settings.get( &Worker::ERROR_404_FILE_NAME ) ),
-                        Worker::ERROR_404_STATUS_LINE.to_string() );           }
+               return self.error_404();           }
         }
     }
 }

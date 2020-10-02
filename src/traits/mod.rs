@@ -15,8 +15,9 @@ pub trait Process{
         return "Todo: get_file: ".to_string() + file_name;
     }
 
-    fn process_message( &mut self, _message: &str ) -> ( String, String ) { return ( self.get_file( "404.html" ), 
-                                                                                    "HTTP/1.1 404 NOT FOUND\r\n\r\n".to_string() ) }
+    fn process_message( &mut self, _message: &str ) -> ( String, String ) { 
+        return ( self.get_file( "404.html" ), "HTTP/1.1 404 NOT FOUND\r\n\r\n".to_string() );
+    }
 
     fn send_answer( &self, mut stream: TcpStream, result: &str, status_line: &str ){
     

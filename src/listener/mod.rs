@@ -69,7 +69,7 @@ impl Process for Listener{
             println!(  "Cpu core need more 2, you have {}", num_cpus + 1);
             return;
         }
-        let mut max_worker_count: u16 = min( self.settings.get( &"max_worker_count".to_string() ).parse().unwrap(),
+        let mut max_worker_count: u16 = min( self.settings.get( "max_worker_count" ).parse().unwrap(),
                                          num_cpus );
         while max_worker_count != 0 {
             let worker = Worker::new( "worker.cfg" );
@@ -106,7 +106,7 @@ impl Process for Listener{
             max_worker_count -= 1;
         }
 
-        let address = self.settings.get( &"listening_address".to_string() );
+        let address = self.settings.get( "listening_address" );
         println!(  "listening_address:{}", address );
         let listener = TcpListener::bind( address );
         match listener {
