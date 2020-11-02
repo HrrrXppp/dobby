@@ -1,34 +1,18 @@
+use core::common_struct::Params;
+
 use std::collections::{ HashMap };
 use std::result::{ Result };
 use crate::traits::WorkWithHashMap;
 extern crate libloading;
 extern crate rustc_serialize;
-use rustc_serialize::Encoder;
-use rustc_serialize::Encodable;
-use rustc_serialize::json::{self, ToJson, Json};
+use rustc_serialize::json;
 
 type RunFunc = unsafe fn( &str, &str ) -> String;
-
-struct Params{
-    desc: String,
-    arg: String
-}
+type InitFunc = unsafe fn();
 
 pub struct Executor{
     func_desc_map: HashMap< String, String>,
     func_map: HashMap< String, libloading::Library >,
-}
-
-impl ToJson for Params {
-    fn to_json(&self) -> Json {
-        Json::String(format!("{}+{}i", self.desc, self.arg))
-    }
-}
-
-impl Encodable for Params {
-    fn encode<S: Encoder>(&self, _s: &mut S) -> Result<(), S::Error> {
-        return Ok(());
-    }
 }
 
 impl Executor{
@@ -45,7 +29,7 @@ impl Executor{
         last = &last[1..];
         let offset1 = last.find( ')' ).unwrap_or( last.len() );
         let ( first1, _last1 ) = last.split_at(offset1);
-        return ( first, first1 );
+        return ( first, first1.trim() );
     }
 
     fn create_args<'life_time>( args_desc: &'life_time str, args: &'life_time str ) -> Result<String, &'life_time str> {
@@ -67,26 +51,35 @@ impl Executor{
         let ( lib, method ) = Executor::split_action( action );
         let ( real_method, args_desc ) = Executor::split_method( method );
         let res_args = Executor::create_args( args_desc, args );
+        print!( "res_args {:?}\n", res_args );
         match res_args {
             Ok(res_args_str) => return ( lib, real_method, res_args_str ),
             Err(e) => println!("Error in Executor::create_args: {}", e)
         }
+        print!( "get_params before return\n" );
         return ( lib, real_method, "".to_string() );
     }
 
-    fn get_lib<'lf_1>( &'lf_1 mut self, lib_name: &str ) -> Option<&'lf_1 libloading::Library > {
-        if !self.func_map.contains_key( lib_name ) {
+    fn get_lib( & mut self, lib_name: &str ) -> Option<& libloading::Library > {
+        let mut opt_lib :Option<& libloading::Library > = None;
+        if self.func_map.contains_key( lib_name ) {
+            opt_lib = self.func_map.get( lib_name );
+        }
+        else
+        {
             println!( "Loading library {}", lib_name );
             let lib = libloading::Library::new( "lib".to_string() + lib_name + ".so" );
             match lib {
                 Ok( lib_unw ) => {
+                    let init_func: libloading::Symbol<InitFunc> = unsafe{ lib_unw.get( b"init" ).unwrap() };
+                    unsafe{ init_func() };
                     self.func_map.insert( lib_name.to_string(), lib_unw );
-                    return self.func_map.get( lib_name );
+                    opt_lib = self.func_map.get( lib_name );
                 },
                 Err( e ) => println!("Unable load library: {} {}", lib_name, e)
             }
         }
-        return None;
+        return opt_lib;
     }
 
     pub fn run( &mut self, action: &str, args: &str ) -> Option< String > {
@@ -95,8 +88,8 @@ impl Executor{
         match lib {
             Some( real_lib ) => {
                 unsafe {
-                    let func: libloading::Symbol<RunFunc> = real_lib.get( b"run" ).unwrap();
-                    return Some( func( method, &real_args ) );
+                    let run_func: libloading::Symbol<RunFunc> = real_lib.get( b"run" ).unwrap();
+                    return Some( run_func( method, &real_args ) );
                 }        
             },
             None => {}
@@ -119,6 +112,5 @@ impl WorkWithHashMap for Executor{
     fn get_mut_hash_map( &mut self ) -> &mut HashMap<String, String> {
         return &mut self.func_desc_map;
     }
-
 }
 

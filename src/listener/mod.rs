@@ -26,15 +26,22 @@ impl Listener{
                          current_worker: 0, settings: Settings::new( "listener.cfg" )  }
     }
 
-    pub fn create<T: Process >( &mut self, mut p : T )->Pid {
+    pub fn create<T: Process >( &mut self, mut p: T )->Pid {
             return p.create();
     }
 
     fn handle_client( &mut self, mut stream: &TcpStream) {
+        
         let mut buffer = [0; 512];
         stream.read(&mut buffer).unwrap();
         let request = string::String::from_utf8_lossy(&buffer[..]);
+        
+        if request.len() == 0{
+            return;
+        }
+
         println!("Request:\n {}", request );
+        println!("Request len:\n {}", request.len() );
 
         let offset = request.find('\n').unwrap_or(request.len());
         let (first, _last) = request.split_at(offset);
@@ -119,6 +126,7 @@ impl Process for Listener{
                     }
                 }
             },
+            // TODO Make interrupt worker
             Err(e) => println!("Unable to bind: {}", e)
         }
 

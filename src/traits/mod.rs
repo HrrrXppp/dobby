@@ -1,87 +1,10 @@
 use nix::unistd::{fork, ForkResult, Pid};
-use std::process;
 use std::collections::{ HashMap };
 use std::fs::{ File };
 use std::io::{ BufReader,BufRead };
-use nix::sys::{ socket, uio };
-use nix::cmsg_space;
-use std::os::unix::io::{ RawFd, FromRawFd };
-use std::net::{ TcpStream };
-use std::io::prelude::*;
 
 pub trait Process{
-
-    fn get_file( &self, file_name: &str ) -> String {
-        return "Todo: get_file: ".to_string() + file_name;
-    }
-
-    fn process_message( &mut self, _message: &str ) -> ( String, String ) { 
-        return ( self.get_file( "404.html" ), "HTTP/1.1 404 NOT FOUND\r\n\r\n".to_string() );
-    }
-
-    fn send_answer( &self, mut stream: TcpStream, result: &str, status_line: &str ){
-    
-        let response = format!("{}{}", status_line, result);
-                                    
-        stream.write( response.as_bytes()).unwrap();
-        stream.flush().unwrap();
-    }
-
-    fn run( &mut self ){
-
-        let socket_name = process::id().to_string() + "queue";
-        let socket = socket::socket( socket::AddressFamily::Unix,
-                                     socket::SockType::Datagram,
-                                     socket::SockFlag::empty(),
-                                     None );
-
-        match socket {
-            Ok(socket) => {
-               socket::bind( socket,
-//                             &socket::SockAddr::Unix( socket::UnixAddr::new( &socket_name[..] ).unwrap() )
-                             &socket::SockAddr::new_unix( &socket_name[..] ).unwrap()
-                            ).unwrap();
-                println!(  "Create socket {} {}", socket_name, socket );
-
-                loop{
-                    println!(  "Loop {}",  socket_name );
-                    let mut buffer = vec![ 0u8; 512 ];
-                    let message_vec = [uio::IoVec::from_mut_slice(&mut buffer)];
-                    let mut cmsg_buffer = cmsg_space!( RawFd );
-                    let result = socket::recvmsg( socket,
-                                                  &message_vec,
-                                                  Some( &mut cmsg_buffer ),
-                                                  socket::MsgFlags::MSG_WAITALL );
-
-                    match result {
-                        Ok( res )=>{
-                            let raw_fd = match res.cmsgs().next() {
-                                Some( socket::ControlMessageOwned::ScmRights( raw_fd ) ) => raw_fd,
-                                Some(_) => panic!("Unexpected control message"),
-                                None => panic!("No control message")                            
-                            };
-                            let stream: TcpStream;
-                            unsafe {
-                                stream = TcpStream::from_raw_fd( raw_fd[ 0 ] );
-                            }
-                        
-                            println!(  "result {}",  socket_name );
-                            let message = String::from_utf8_lossy( message_vec[0].as_slice() );
-                            println!( "{}", message );
-                            let ( result, status ) = self.process_message( &message );
-                            self.send_answer( stream, &result, &status );
-                        },
-                        Err( result ) =>{
-                            println!("error in socket::recvmsg : {}", result );
-                            process::exit( 0 );
-                        }
-                    }
-
-                }
-            },
-            Err(socket) => println!("Unable to create socket for : {} {}", socket_name, socket)
-        }
-    }
+    fn run( &mut self );
 
     fn create( &mut self ) -> Pid{
         println!(  "Process: Create>" );
@@ -107,6 +30,7 @@ pub trait WorkWithHashMap{
 
     fn new( filename: &str ) ->Self;
 
+    // TODO разобраться с этими функциями
     fn get_hash_map( &self ) -> &HashMap<String, String>;
 
     fn get_mut_hash_map( &mut self ) -> &mut HashMap<String, String>;
@@ -136,6 +60,29 @@ pub trait WorkWithHashMap{
 
     fn get_option( &self, setting_name : &String ) -> Option< &String >  {
         return self.get_hash_map().get( setting_name );
+    }
+
+}
+
+pub trait Parser{
+
+    fn real_message_by_get<'lifetime>( &self, message: &'lifetime str ) -> ( &'lifetime str, &'lifetime str ) {
+        println!(  "real_message_by_get {}", message );
+        let offset = message.find("HTTP").unwrap_or( message.len() );
+        let (mut first, _last) = message.split_at(offset);
+        println!(  "    first {}", first );
+        if first.len() <= 1 {
+            return ( "", "" );
+        }
+        first = first.trim();
+        first = &first[1..];
+        first = first.trim();
+        let offset1 = first.find( "/" ).unwrap_or( first.len() );
+        let ( func, mut args ) = first.split_at(offset1);
+        if args.len() > 0 {
+            args = &args[1..];
+        }
+        return ( func, args );
     }
 
 }

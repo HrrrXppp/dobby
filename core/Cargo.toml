@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "dobby_core"
 version = "0.1.0"
 authors = ["Khrunov Evgeniy <hrrrxppp@gmail.com>"]
 edition = "2018"
@@ -13,3 +13,5 @@ crate-type = ["dylib"]
 
 [dependencies]
 lazy_static = "1.4.0"
+rustc-serialize = "0.3.24"
+
