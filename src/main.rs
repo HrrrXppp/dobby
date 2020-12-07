@@ -3,16 +3,15 @@ pub mod traits;
 pub mod app;
 pub mod listener;
 pub mod worker;
-pub mod settings;
 pub mod router;
 pub mod executor;
-pub mod file_cache;
 use crate::app::App;
 use crate::listener::Listener;
 
 fn main() {
 
 let mut app = App{};
+app.init();
 let listener = Listener::new();
 app.create(listener);
 

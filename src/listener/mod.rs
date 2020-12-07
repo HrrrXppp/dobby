@@ -9,8 +9,8 @@ use std::os::unix::io::{ RawFd, AsRawFd };
 extern crate num_cpus;
 use crate::traits::Process;
 use crate::worker::Worker;
-use crate::settings::Settings;
-use crate::traits::WorkWithHashMap;
+use core::settings::Settings;
+use core::traits::WorkWithHashMap;
 
 pub struct Listener{
     worker_vec:  Vec< Pid >,
@@ -97,12 +97,9 @@ impl Process for Listener{
                 }
             }
 
-
             let ten_millis = time::Duration::from_millis(500);
             thread::sleep(ten_millis);
             println!(  "Open socket {}", socket_name );
-
-
 
             match socket::connect( self.socket_vec[ self.socket_vec.len() - 1 ],
                                    &socket::SockAddr::Unix( socket::UnixAddr::new( &socket_name[..] ).unwrap() ) ) {

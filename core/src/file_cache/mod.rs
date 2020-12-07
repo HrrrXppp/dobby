@@ -10,22 +10,22 @@ use std::fs::File;
 use std::io::Read;
 use std::convert::{ TryInto };
 use std::ptr;
+use std::collections::VecDeque;
 
-
-struct CasheNode{
+struct CacheNode{
     // Simple, without collision, without rebalanced, cor small node count
     hash: u64, 
-    left: *mut CasheNode,
-    right: *mut CasheNode,
+    left: *mut CacheNode,
+    right: *mut CacheNode,
     shared_mem: Shmem
 }
 
-impl CasheNode{
+impl CacheNode{
 
-    fn create_node(&mut self, file_name_hash: u64, value: &String ) {
+    fn create_node(&mut self, file_name_hash: u64, value: &String, file_cache_folder: &String ) {
         let size = value.len();
         print!("create_node {}\n", size );
-        self.shared_mem = match ShmemConf::new().size( size ).flink( file_name_hash.to_string() ).create() {
+        self.shared_mem = match ShmemConf::new().size( size ).flink( file_cache_folder.to_owned() + &file_name_hash.to_string() ).create() {
             Ok( m)  => m,
             Err( ShmemError::LinkExists ) => panic!( "Shared memory exist {}", file_name_hash ),
             Err( e ) => panic!( "Don't create shared memory {}", e ),
@@ -47,7 +47,7 @@ impl CasheNode{
             return Some( result );
         }
 
-        let mut current_node: *mut CasheNode = ptr::null_mut();
+        let mut current_node: *mut CacheNode = ptr::null_mut();
         if file_name_hash < self.hash {
             current_node = self.left;
             print!("self.left\n");
@@ -71,18 +71,19 @@ impl CasheNode{
 
 pub struct FileCache{
     mutex: Box::< dyn raw_sync::locks::LockImpl >,
-    root_cache: *mut *mut CasheNode,
+    root_cache: *mut *mut CacheNode,
     mutex_mem: Shmem,
     tree_mem: Shmem,
     node_count: *mut u64,
-    nodes: *mut CasheNode,
-    max_nodes: usize
+    nodes: *mut CacheNode,
+    max_nodes: usize,
+    settings: Settings
 }
 
 impl FileCache{
     pub fn new( file_settings_name: &str ) -> FileCache {
         let new_settings = Settings::new( file_settings_name );
-        let mutex_name: String = new_settings.get( "mutex_name" );
+        let mutex_name: String = new_settings.get( "file_cache_folder" ) + &new_settings.get( "mutex_name" );
         let mutex_shmem = match ShmemConf::new().size( 4096 ).flink( &mutex_name ).create() {
             Ok( m)  => m,
             Err( ShmemError::LinkExists ) =>ShmemConf::new().flink( &mutex_name ).open().unwrap(),
@@ -93,11 +94,13 @@ impl FileCache{
         let base_ptr = mutex_shmem.as_ptr();
 
         if mutex_shmem.is_owner(){
+            println!( "mutex_shmem.is_owner()" );
             temp_mutex = unsafe{
                 Mutex::new( base_ptr, base_ptr.add( Mutex::size_of( Some( base_ptr ) ) ) ).unwrap().0 
             };
         }
         else{
+            println!( "not mutex_shmem.is_owner()" );
             temp_mutex = unsafe {
                 Mutex::from_existing( base_ptr, base_ptr.add( Mutex::size_of( Some( base_ptr ) ) ) ).unwrap().0
             };    
@@ -105,22 +108,30 @@ impl FileCache{
         let tree_shmem: Shmem;
         let nodes_count: usize;
         {
-            let mut _guard = temp_mutex.lock().unwrap();
+            let mut guard = temp_mutex.lock().unwrap();
 
-            let file_cache_name: String = new_settings.get( "file_cache_name" );
+            let file_cache_name: String = new_settings.get( "file_cache_folder" ) + &new_settings.get( "file_cache_name" );
             nodes_count = new_settings.get( "nodes_count" ).parse::<usize>().unwrap();
-            let tree_mem_size = size_of::< CasheNode >() * nodes_count + size_of::< *mut *mut CasheNode >() + size_of::< *mut u64 >();
+            let tree_mem_size = size_of::< CacheNode >() * nodes_count + size_of::< *mut *mut CacheNode >() + size_of::< *mut u64 >();
             print!( "tree_mem_size = {}, nodes_count = {}\n", tree_mem_size, nodes_count );
             tree_shmem = match ShmemConf::new().size( tree_mem_size ).flink( &file_cache_name ).create() {
-                Ok( m)  => m,
-                Err( ShmemError::LinkExists ) =>ShmemConf::new().flink( &file_cache_name ).open().unwrap(),
+                Ok( m)  => {
+                    println!("Create shared memory {}", file_cache_name );
+                    m
+                },
+                Err( ShmemError::LinkExists ) => {
+                    println!("Open shared memory {}", file_cache_name );
+                    ShmemConf::new().flink( &file_cache_name ).open().unwrap()
+                },
                 Err( e ) => panic!( "Don't create shared memmory {}", e ),
             };
+            let mutex_val: &mut u8 = unsafe { &mut **guard };
+            *mutex_val += 1;
         }
-        let root_cache_ptr = tree_shmem.as_ptr() as *mut *mut CasheNode;
-        let node_count_ptr = unsafe{ tree_shmem.as_ptr().offset( size_of::< *mut *mut CasheNode >() .try_into().unwrap() ) as *mut u64 };
-        let tree_ptr = unsafe{ tree_shmem.as_ptr().offset( (size_of::< *mut *mut CasheNode >() + size_of::< *mut u64 >()).try_into().unwrap() ) as *mut CasheNode };
-        print!( "node_count_ptr = {:?}, tree_ptr = {:?}\n", node_count_ptr, tree_ptr );
+        let root_cache_ptr = tree_shmem.as_ptr() as *mut *mut CacheNode;
+        let node_count_ptr = unsafe{ tree_shmem.as_ptr().offset( size_of::< *mut *mut CacheNode >() .try_into().unwrap() ) as *mut u64 };
+        let tree_ptr = unsafe{ tree_shmem.as_ptr().offset( (size_of::< *mut *mut CacheNode >() + size_of::< *mut u64 >()).try_into().unwrap() ) as *mut CacheNode };
+        print!( "root_cache_ptr = {:?}, node_count_ptr = {:?}, tree_ptr = {:?}\n", root_cache_ptr, node_count_ptr, tree_ptr );
         return FileCache{ 
             mutex: temp_mutex,
             root_cache: root_cache_ptr,
@@ -129,15 +140,16 @@ impl FileCache{
             node_count: node_count_ptr,
             nodes: tree_ptr,
             max_nodes: nodes_count,
+            settings: new_settings
         };
     }
 
-    fn add_node( &self, new_node: *mut CasheNode ) {
-        let root_node: *mut CasheNode = unsafe{ *self.root_cache };
+    fn add_node( &self, new_node: *mut CacheNode ) {
+        let root_node: *mut CacheNode = unsafe{ *self.root_cache };
         print!( "new_node {:?}\n", new_node );
         match unsafe{ root_node.as_ref() } {
             Some( _ ) => {
-                let mut current_ptr: *mut CasheNode = root_node;
+                let mut current_ptr: *mut CacheNode = root_node;
                 print!( "new_node {:?}\n", new_node );
                 loop {
                     let ref mut current = unsafe{ current_ptr.as_mut().unwrap() };
@@ -177,28 +189,31 @@ impl FileCache{
         }
     }
 
-    fn load_file_to_cashe( &mut self, file_name: &str ) -> String {
+    fn load_file_to_cashe( &mut self, file_name: &str ) -> Option< String > {
         let ref mut count: usize = ( unsafe{ *self.node_count } ).try_into().unwrap();
         print!( "load_file_to_cashe {} {}\n", file_name, count );
         if *count >= self.max_nodes {
             panic!( "Maximum number of nodes reached {}", self.max_nodes );
         }
         let mut contents = String::new();
-        let mut file = File::open( file_name ).unwrap();
+        let mut file =  match File::open( file_name ){
+            Ok( opened_file ) => opened_file,
+            Err( _ ) => return None
+        };
         file.read_to_string( &mut contents ).unwrap();
         print!( "contents {}", contents );
         let file_name_hash = self.get_hash( file_name );
-        let node_ptr: *mut CasheNode = unsafe{ self.nodes.offset( ( *count ).try_into().unwrap() ) };
+        let node_ptr: *mut CacheNode = unsafe{ self.nodes.offset( ( *count ).try_into().unwrap() ) };
         print!( "load_file_to_cashe node_ptr = {:?}\n", node_ptr );
-        unsafe{ &mut *node_ptr }.create_node( file_name_hash, &contents );
+        unsafe{ &mut *node_ptr }.create_node( file_name_hash, &contents, &self.settings.get( "file_cache_folder" ) );
         unsafe{ *self.node_count += 1 };
         self.add_node( unsafe{ &mut *node_ptr } );
-        return contents;
+        return Some( contents );
     }
 
-    pub fn get_file( &mut self, file_name: &str ) -> String {
+    pub fn get_file( &mut self, file_name: &str ) -> Option< String > {
         let res = match self.get_from_cache( file_name ){
-            Some( data ) => data,
+            Some( data ) => Some( data ),
             None => self.load_file_to_cashe( file_name )
         };
 
@@ -225,6 +240,55 @@ impl FileCache{
         return None;
     }
 }
+impl Drop for CacheNode {
+    fn drop(&mut self) {
+        println!(" Dropping CacheNode");
+    }
+}
+
+impl Drop for FileCache {
+    fn drop(&mut self) {
+        let mut guard = self.mutex.lock().unwrap();
+        let mutex_val: &mut u8 = unsafe { &mut **guard };
+        *mutex_val -= 1;        
+        println!(" Dropping file cache {}!", *mutex_val );
+        if *mutex_val == 0 {
+            println!(" Dropping tree");
+            let root_node = unsafe{ self.root_cache.as_ref().unwrap().as_ref() };
+            let mut queue: VecDeque<Option<&CacheNode>> = VecDeque::new();
+            queue.push_back( root_node );
+            loop {
+                println!("queue.len() {}", queue.len() );
+                if queue.len() == 0 {
+                    break;
+                } 
+                let ref mut current_node = queue.pop_front();
+                println!("queue.len() after pop {}", queue.len() );
+                match current_node {
+                    Some( node ) => {
+                        match unsafe{ node.unwrap().left.as_ref() } {
+                            Some( node_left ) => {
+                                println!("node_left");
+                                queue.push_back( Some( node_left ) );
+                            },
+                            _ => {}
+                        };
+                        match unsafe{ node.unwrap().right.as_ref() } {
+                            Some( node_right ) => {
+                                println!("node_right");
+                                queue.push_back( Some( node_right ) );
+                            },
+                            _ => {}
+                        };
+                        println!("drop( node )");
+                        drop( node.unwrap() );
+                    },
+                    _ => {}        
+                }
+            }
+        } 
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -232,24 +296,29 @@ mod tests {
     use std::thread;   
     #[test]
     fn get_file() {
-        let mut file_cache = FileCache::new( "file_cache.cfg" );
+        let mut file_cache = FileCache::new( "../file_cache.cfg" );
 
-        let file_hello: String = file_cache.get_file( "hello.html" );
-        let worker_cfg: String = file_cache.get_file( "worker.cfg" );
-        let file_404: String = file_cache.get_file( "404.html" );
-        let file_cache_cfg: String = file_cache.get_file( "file_cache.cfg" );
+        let file_hello: String = file_cache.get_file( "../hello.html" ).unwrap();
+        let worker_cfg: String = file_cache.get_file( "../worker.cfg" ).unwrap();
+        let file_404: String = file_cache.get_file( "../404.html" ).unwrap();
+        let file_cache_cfg: String = file_cache.get_file( "../file_cache.cfg" ).unwrap();
 
         let handle = thread::spawn(move || {
-            let thread_file_cache = FileCache::new( "file_cache.cfg" );
-            let thread_file_404: String = thread_file_cache.get_from_cache( "404.html" ).unwrap();
+            let thread_file_cache = FileCache::new( "../file_cache.cfg" );
+            let thread_file_404: String = thread_file_cache.get_from_cache( "../404.html" ).unwrap();
             assert_eq!(thread_file_404, file_404);
-            let thread_file_hello: String = thread_file_cache.get_from_cache( "hello.html" ).unwrap();
+            let thread_file_hello: String = thread_file_cache.get_from_cache( "../hello.html" ).unwrap();
             assert_eq!(thread_file_hello, file_hello);
-            let thread_worker_cfg: String = thread_file_cache.get_from_cache( "worker.cfg" ).unwrap();
+            let thread_worker_cfg: String = thread_file_cache.get_from_cache( "../worker.cfg" ).unwrap();
             assert_eq!(thread_worker_cfg, worker_cfg);
-            let thread_file_cache_cfg: String = thread_file_cache.get_from_cache( "file_cache.cfg" ).unwrap();
+            let thread_file_cache_cfg: String = thread_file_cache.get_from_cache( "../file_cache.cfg" ).unwrap();
             assert_eq!(thread_file_cache_cfg, file_cache_cfg);
             });    
         handle.join().unwrap();
+    }
+
+    #[test]
+    fn drop_file_cache() {
+        get_file();
     }
 }

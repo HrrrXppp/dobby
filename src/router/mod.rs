@@ -1,5 +1,5 @@
 use std::collections::{ HashMap };
-use crate::traits::WorkWithHashMap;
+use core::traits::WorkWithHashMap;
 
 pub struct Router{
     route_rules:  HashMap<String, String>

@@ -1,8 +1,8 @@
 use core::common_struct::Params;
+use core::traits::WorkWithHashMap;
 
 use std::collections::{ HashMap };
 use std::result::{ Result };
-use crate::traits::WorkWithHashMap;
 extern crate libloading;
 extern crate rustc_serialize;
 use rustc_serialize::json;

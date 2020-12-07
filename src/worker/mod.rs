@@ -1,8 +1,9 @@
-use crate::traits::{ Process, WorkWithHashMap, Parser };
-use crate::settings::Settings;
+use crate::traits::{ Process, Parser };
+use core::traits::WorkWithHashMap;
+use core::settings::Settings;
 use crate::router::Router;
 use crate::executor::Executor;
-use crate::file_cache::FileCache;
+use core::file_cache::FileCache;
 
 use std::process;
 use nix::sys::{ socket, uio };
@@ -15,7 +16,8 @@ pub struct Worker{
     file_name_404: String,
     route_rules: Router,
     executor: Executor,
-    file_cache: FileCache
+    file_cache: Option< FileCache >,
+    settings: Settings
 }
 
 impl <'worker_lf> Worker{
@@ -27,8 +29,9 @@ impl <'worker_lf> Worker{
         return Worker{ 
                     route_rules: Router::new( &new_settings.get( "route_rules_file_name" ) ),
                     executor: Executor::new( &new_settings.get( "executor_rules_file_name" ) ), 
-                    file_cache: FileCache::new( &new_settings.get( "file_cache_setting_file_name") ),
-                    file_name_404: new_settings.get( "error_404_file_name" ) 
+                    file_cache: None,
+                    file_name_404: new_settings.get( "error_404_file_name" ),
+                    settings: new_settings 
                };
     }
 
@@ -75,7 +78,8 @@ impl <'worker_lf> Worker{
     }
 
     fn error_404( &mut self ) -> ( String, String ){
-        return ( self.file_cache.get_file( &self.file_name_404 ),
+        let file_name_404 = self.file_name_404.clone();
+        return ( self.get_file_cache().get_file( &file_name_404 ).unwrap(),
                  Worker::ERROR_404_STATUS_LINE.to_string() );
     } 
 
@@ -86,6 +90,15 @@ impl <'worker_lf> Worker{
         stream.write( response.as_bytes()).unwrap();
         stream.flush().unwrap();
     }
+    
+    fn get_file_cache( &mut self ) -> &mut FileCache{
+        match self.file_cache {
+            None => self.file_cache = Some( FileCache::new( &self.settings.get( "file_cache_setting_file_name") ) ),
+            _ => {}
+        }
+        self.file_cache.as_mut().unwrap()
+    }
+    
 }
 
 impl Parser for Worker{}
