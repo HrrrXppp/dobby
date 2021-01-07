@@ -11,7 +11,6 @@ use crate::listener::Listener;
 fn main() {
 
 let mut app = App{};
-app.init();
 let listener = Listener::new();
 app.create(listener);
 

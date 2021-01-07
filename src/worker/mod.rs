@@ -92,10 +92,12 @@ impl <'worker_lf> Worker{
     }
     
     fn get_file_cache( &mut self ) -> &mut FileCache{
+        println!( "get_file_cache" );
         match self.file_cache {
             None => self.file_cache = Some( FileCache::new( &self.settings.get( "file_cache_setting_file_name") ) ),
             _ => {}
         }
+        println!( "get_file_cache end" );
         self.file_cache.as_mut().unwrap()
     }
     

@@ -11,13 +11,15 @@ use std::io::Read;
 use std::convert::{ TryInto };
 use std::ptr;
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 struct CacheNode{
     // Simple, without collision, without rebalanced, cor small node count
     hash: u64, 
     left: *mut CacheNode,
     right: *mut CacheNode,
-    shared_mem: Shmem
+    shared_mem: Shmem,
+    load_time: Instant
 }
 
 impl CacheNode{
@@ -34,12 +36,50 @@ impl CacheNode{
         self.left = ptr::null_mut();
         self.right = ptr::null_mut();
         self.hash = file_name_hash;
-//        unsafe{ self.shared_mem.as_ptr().write_bytes( value[..].as_ptr() as u8, size ) };
+        self.load_time = Instant::now();
         unsafe{ self.shared_mem.as_slice_mut().clone_from_slice( value.as_bytes() ) };
         print!("self.shared_mem.as_slice {}\n", unsafe{ String::from_utf8_lossy( self.shared_mem.as_slice() ) } );
     }
 
-    pub fn get( &self, file_name_hash: u64 ) -> Option< String > {        
+    fn get_with_reload( &mut self, file_name_hash: u64, file_name: &str, reload_period: Duration ) -> Option< String > {
+        print!("reload {:?} {:?}\n", file_name_hash, self.hash );
+        if self.hash == file_name_hash {
+            let result: String;
+            if self.load_time.elapsed() < reload_period {
+                result = self.get_data();
+            } else {
+                let mut contents = String::new();
+                let mut file =  match File::open( file_name ){
+                    Ok( opened_file ) => opened_file,
+                    Err( _ ) => return None
+                };
+                file.read_to_string( &mut contents ).unwrap();
+                print!( "contents {}", contents );
+                unsafe{ self.shared_mem.as_slice_mut().clone_from_slice( contents.as_bytes() ) };
+                result = self.get_data();
+            };
+            print!("result {:?}\n", result );
+            return Some( result );
+        }
+
+        let mut current_node: *mut CacheNode = ptr::null_mut();
+        if file_name_hash < self.hash {
+            current_node = self.left;
+            print!("self.left\n");
+        }
+        else if file_name_hash > self.hash {
+            current_node = self.right;
+            print!("self.right\n");
+        }
+        match unsafe{ current_node.as_mut() } {
+            Some( node ) => return node.get_with_reload( file_name_hash, file_name, reload_period ),
+            _ => {}
+        }
+        print!("return None\n");
+        return None;
+    }
+
+    pub fn get( &self, file_name_hash: u64 ) -> Option< String > {
         print!("get {:?} {:?}\n", file_name_hash, self.hash );
         if self.hash == file_name_hash {
             let result = self.get_data();
@@ -84,6 +124,7 @@ impl FileCache{
     pub fn new( file_settings_name: &str ) -> FileCache {
         let new_settings = Settings::new( file_settings_name );
         let mutex_name: String = new_settings.get( "file_cache_folder" ) + &new_settings.get( "mutex_name" );
+        println!( "mutex_name {}", mutex_name );
         let mutex_shmem = match ShmemConf::new().size( 4096 ).flink( &mutex_name ).create() {
             Ok( m)  => m,
             Err( ShmemError::LinkExists ) =>ShmemConf::new().flink( &mutex_name ).open().unwrap(),
@@ -211,7 +252,17 @@ impl FileCache{
         return Some( contents );
     }
 
+    pub fn get_file_with_reload( &mut self, file_name: &str, reload_period: Duration ) -> Option< String > {
+        let res = match self.get_from_cache_with_reload( file_name, reload_period ){
+            Some( data ) => Some( data ),
+            None  => self.load_file_to_cashe( file_name )
+        };
+
+        return res;
+    }
+
     pub fn get_file( &mut self, file_name: &str ) -> Option< String > {
+        println!( "get_file {}", file_name );
         let res = match self.get_from_cache( file_name ){
             Some( data ) => Some( data ),
             None => self.load_file_to_cashe( file_name )
@@ -224,6 +275,21 @@ impl FileCache{
         let mut hasher = DefaultHasher::new();
         file_name.hash(&mut hasher);
         return hasher.finish();
+    }
+
+    fn get_from_cache_with_reload( &self, file_name: &str, reload_period: Duration ) -> Option<String> {        
+        print!( "get_from_cache_with_reload {:?} \n", unsafe{ self.root_cache.as_ref().unwrap() } );
+        match unsafe{ self.root_cache.as_ref().unwrap().as_mut() } {
+            Some( node ) => {
+                let mut _guard = self.mutex.lock().unwrap();
+                let file_name_hash = self.get_hash( file_name );
+                print!( "file_name_hash {:?} \n", file_name_hash );
+                let res = node.get_with_reload( file_name_hash, file_name, reload_period );
+                return res;
+            },
+            _ => {}
+        }
+        return None;
     }
 
     fn get_from_cache( &self, file_name: &str ) -> Option<String> {        

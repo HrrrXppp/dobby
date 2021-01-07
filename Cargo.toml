@@ -12,3 +12,4 @@ libloading = "0.5"
 rustc-serialize = "0.3.24"
 libc = "0.2.79"
 dobby_core = { path = "core" }
+dobby_gpio = { path = "gpio" }
