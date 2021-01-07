@@ -58,6 +58,7 @@ impl CacheNode{
                 file.read_to_string( &mut contents ).unwrap();
                 print!( "contents {}", contents );
                 unsafe{ self.shared_mem.as_slice_mut().clone_from_slice( contents.as_bytes() ) };
+                self.load_time = Instant::now();
                 result = self.get_data();
             };
             print!("result {:?}\n", result );
