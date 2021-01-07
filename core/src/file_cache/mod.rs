@@ -42,9 +42,11 @@ impl CacheNode{
     }
 
     fn get_with_reload( &mut self, file_name_hash: u64, file_name: &str, reload_period: Duration ) -> Option< String > {
-        print!("reload {:?} {:?}\n", file_name_hash, self.hash );
+        print!("get_with_reload {:?} {:?}\n", file_name_hash, self.hash );
         if self.hash == file_name_hash {
             let result: String;
+            println!( "self.load_time.elapsed() {:?}", self.load_time.elapsed() );
+            println!( "reload_period {:?}", reload_period );
             if self.load_time.elapsed() < reload_period {
                 result = self.get_data();
             } else {
