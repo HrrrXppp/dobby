@@ -14,3 +14,5 @@ impl Params {
         return &self.arg;
     }
 }
+
+pub type RunFuncType = fn( &Vec< Params > ) -> String;

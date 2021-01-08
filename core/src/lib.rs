@@ -5,15 +5,14 @@ pub mod settings;
 pub mod traits;
 use crate::traits::WorkWithHashMap;
 use common_struct::Params;
+use common_struct::RunFuncType;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 extern crate rustc_serialize;
 use rustc_serialize::json;
 
-type FuncType = fn( &Vec< Params > ) -> String;
-
-static mut FUNCS: Option<Mutex<HashMap<String, FuncType>>> = None;//  Mutex::new( HashMap::new());
+static mut FUNCS: Option<Mutex<HashMap<String, RunFuncType>>> = None;//  Mutex::new( HashMap::new());
 static mut SETTINGS: Option<settings::Settings>  = None;
 static mut FILE_CACHE: Option<file_cache::FileCache>  = None;//file_cache::FileCache::new("file_name");
 
