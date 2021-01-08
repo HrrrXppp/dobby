@@ -117,7 +117,7 @@ pub struct FileCache{
     root_cache: *mut *mut CacheNode,
     mutex_mem: Shmem,
     tree_mem: Shmem,
-    node_count: *mut u64,
+    node_count: *mut u32,
     nodes: *mut CacheNode,
     max_nodes: usize,
     settings: Settings
@@ -173,7 +173,7 @@ impl FileCache{
             *mutex_val += 1;
         }
         let root_cache_ptr = tree_shmem.as_ptr() as *mut *mut CacheNode;
-        let node_count_ptr = unsafe{ tree_shmem.as_ptr().offset( size_of::< *mut *mut CacheNode >() .try_into().unwrap() ) as *mut u64 };
+        let node_count_ptr = unsafe{ tree_shmem.as_ptr().offset( size_of::< *mut *mut CacheNode >() .try_into().unwrap() ) as *mut u32 };
         let tree_ptr = unsafe{ tree_shmem.as_ptr().offset( (size_of::< *mut *mut CacheNode >() + size_of::< *mut u64 >()).try_into().unwrap() ) as *mut CacheNode };
         print!( "root_cache_ptr = {:?}, node_count_ptr = {:?}, tree_ptr = {:?}\n", root_cache_ptr, node_count_ptr, tree_ptr );
         return FileCache{ 
@@ -234,6 +234,7 @@ impl FileCache{
     }
 
     fn load_file_to_cashe( &mut self, file_name: &str ) -> Option< String > {
+        println!( "node_count: {}", unsafe{ *self.node_count} );
         let ref mut count: usize = ( unsafe{ *self.node_count } ).try_into().unwrap();
         print!( "load_file_to_cashe {} {}\n", file_name, count );
         if *count >= self.max_nodes {
