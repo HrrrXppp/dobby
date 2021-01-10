@@ -9,7 +9,7 @@ use std::process;
 use nix::sys::{ socket, uio };
 use nix::cmsg_space;
 use std::os::unix::io::{ RawFd, FromRawFd };
-use std::net::{ TcpStream };
+use std::net::{ TcpStream, Shutdown };
 use std::io::prelude::*;
 
 pub struct Worker{
@@ -89,6 +89,7 @@ impl <'worker_lf> Worker{
                                     
         stream.write( response.as_bytes()).unwrap();
         stream.flush().unwrap();
+        stream.shutdown( Shutdown::Both ).expect( "shotdown stream failed" );
     }
     
     fn get_file_cache( &mut self ) -> &mut FileCache{
