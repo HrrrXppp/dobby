@@ -15,6 +15,6 @@ crate-type = ["dylib"]
 lazy_static = "1.4.0"
 rustc-serialize = "0.3.24"
 raw_sync = "0.1.2"
-shared_memory = "0.11.3"
-
+shared_memory = { path = "./shared_memory" }
+libc = "0.2"
 

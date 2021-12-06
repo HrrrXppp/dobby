@@ -5,7 +5,7 @@ pub trait Process{
 
     fn create( &mut self ) -> Pid{
         println!(  "Process: Create>" );
-        match fork() {
+        match unsafe{ fork() } {
            Ok(ForkResult::Parent { child, .. }) => {
                println!("Continuing execution in parent process, new child has pid: {}", child);
                return child;
