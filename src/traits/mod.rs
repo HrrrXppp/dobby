@@ -1,27 +1,3 @@
-use nix::unistd::{fork, ForkResult, Pid};
-
-pub trait Process{
-    fn run( &mut self );
-
-    fn create( &mut self ) -> Pid{
-        println!(  "Process: Create>" );
-        match unsafe{ fork() } {
-           Ok(ForkResult::Parent { child, .. }) => {
-               println!("Continuing execution in parent process, new child has pid: {}", child);
-               return child;
-           },
-           Ok(ForkResult::Child) => {
-                println!("I'm a new child process");
-                self.run();
-                println!("End child process");
-                return Pid::this();
-           },
-           Err(_) => println!("Fork failed"),
-        }
-        return Pid::from_raw( 0 );
-    }
-}
-
 pub trait Parser{
 
     fn real_message_by_get<'lifetime>( &self, message: &'lifetime str ) -> ( &'lifetime str, &'lifetime str ) {

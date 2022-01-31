@@ -1,9 +1,12 @@
 [package]
-name = "shared_memory"
+name = "guard"
 version = "0.1.0"
 authors = ["Khrunov Evgeniy <hrrrxppp@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-nix = "0.23"
+libc = "0.2"
+log = "0.4"
+shared_memory = { path = "../shared_memory" }
 dobby_hash = { path = "../hash" }
+nix = "0.23"

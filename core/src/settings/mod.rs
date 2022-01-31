@@ -10,7 +10,7 @@ impl Settings{
 
 impl WorkWithHashMap for Settings{
 
-    fn new( filename: &str ) ->Settings {
+    fn new( filename: &str ) -> Settings {
         let mut new_settings = Settings{ settings: HashMap::new() };
         new_settings.load( filename );
         return new_settings;

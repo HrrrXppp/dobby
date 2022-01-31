@@ -7,7 +7,7 @@ use nix::unistd::{ Pid };
 use nix::sys::{ socket, uio };
 use std::os::unix::io::{ RawFd, AsRawFd };
 extern crate num_cpus;
-use crate::traits::Process;
+use core::traits::Process;
 use crate::worker::Worker;
 use core::settings::Settings;
 use core::traits::WorkWithHashMap;
@@ -67,6 +67,8 @@ impl Listener{
 }
 
 impl Process for Listener{
+    fn init( &mut self ) {}
+
     fn run( &mut self ){
         println!(  "Run Listener" );
 
@@ -78,6 +80,7 @@ impl Process for Listener{
         }
         let mut max_worker_count: u16 = min( self.settings.get( "max_worker_count" ).parse().unwrap(),
                                          num_cpus );
+
         while max_worker_count != 0 {
             let worker = Worker::new( "worker.cfg" );
             let worker_pid = self.create(worker);

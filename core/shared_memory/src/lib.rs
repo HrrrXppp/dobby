@@ -4,22 +4,34 @@ use nix::sys::mman::{mmap, munmap, shm_open, shm_unlink, MapFlags, ProtFlags};
 use std::os::unix::io::RawFd;
 use nix::unistd::{ ftruncate, close };
 use std::ptr::null_mut;
+use nix::libc::c_char;
+use std::ffi::CStr;
+use std::str;
 
+pub static SHARED_MEMORY_PREFIX: &str = "dobby.";
 
 #[derive(Debug)]
 pub struct SharedMemory {
     fd: RawFd,
     size: usize,
     ptr: *mut u8,
-    is_owner: bool,   
-    unique_id: String,
+    unique_id: u64,
 }
 
 impl SharedMemory {
-    pub fn new(unique_id: &str, size: usize) -> SharedMemory {
-        println!("{}", unique_id);
+
+    fn get_full_id(unique_id: u64) -> String {
+        return SHARED_MEMORY_PREFIX.to_owned() + &unique_id.to_string();
+    }
+
+    pub fn new(unique_id: u64, size: usize) -> SharedMemory {
+        
+        let full_unique_id = SharedMemory::get_full_id(unique_id);
+
+        println!("unique_id: {}", unique_id);
+
         let shmem_fd = match shm_open(
-            unique_id, 
+            full_unique_id.as_str(), 
             OFlag::O_CREAT | OFlag::O_EXCL | OFlag::O_RDWR, 
             Mode::S_IRUSR | Mode::S_IWUSR,                  
         ) {
@@ -47,15 +59,24 @@ impl SharedMemory {
             Err(e) => panic!("Shared memory didn't mmap! {}", e),
         };
     
-        SharedMemory{fd: shmem_fd, size: size, ptr: ptr, is_owner: true, unique_id: unique_id.to_string()}
+        SharedMemory{fd: shmem_fd, size: size, ptr: ptr, unique_id: unique_id}
     }
 
     pub unsafe fn as_slice_mut(&mut self) -> &mut [u8] {
+        println!("SharedMemory.as_slice_mut()");
         std::slice::from_raw_parts_mut(self.as_ptr(), self.len())
     }
 
-    pub unsafe fn as_slice(&self) -> &[u8] {
-        std::slice::from_raw_parts(self.as_ptr(), self.len())
+    pub fn to_string(&self) -> String {
+        println!("SharedMemory.as_slice()");
+        let ptr = self.as_ptr();
+        let len = self.len();
+        println!("ptr: {:?}, len: {}", ptr, len);
+        let slice = unsafe{ std::slice::from_raw_parts(ptr, len) };
+        println!("1");
+        let str_buf = str::from_utf8( slice );
+        println!("SharedMemory.as_slice() end!!! res: {:?}", str_buf);
+        return str_buf.unwrap().to_string();
     }
 
     pub fn len(&self) -> usize {
@@ -68,16 +89,15 @@ impl SharedMemory {
 
     pub fn resize(&mut self, size: usize) -> SharedMemory {
         self.drop();
-        return SharedMemory::new(&self.unique_id, size);
-    }
+        return SharedMemory::new(self.unique_id, size);
+    }    
 
-    pub fn is_owner(&self) -> bool {
-        self.is_owner
-    }
+    fn open(unique_id: u64) -> SharedMemory {
 
-    fn open(unique_id: &str) -> SharedMemory {
+        let full_unique_id = SharedMemory::get_full_id(unique_id);
+
         let shmem_fd = match shm_open(
-            unique_id,
+            full_unique_id.as_str(),
             OFlag::O_RDWR,
             Mode::S_IRUSR,
         ) {
@@ -104,7 +124,7 @@ impl SharedMemory {
             Err(e) => panic!("Shared memory didn't mmap! {}", e),
         };
     
-        SharedMemory{fd: shmem_fd, size: size, ptr: ptr, is_owner: false, unique_id: unique_id.to_string() }      
+        SharedMemory{fd: shmem_fd, size: size, ptr: ptr, unique_id: unique_id }      
     }    
 
     pub fn drop(&mut self) {
@@ -115,7 +135,10 @@ impl SharedMemory {
         }
 
         if self.fd != 0 {
-            if let Err(_e) = shm_unlink(self.unique_id.as_str()) {
+
+            let full_unique_id = SharedMemory::get_full_id(self.unique_id);
+
+            if let Err(_e) = shm_unlink(full_unique_id.as_str()) {
             };
 
             if let Err(_e) = close(self.fd) {
@@ -123,5 +146,4 @@ impl SharedMemory {
             };
         }
     }
-
 } 

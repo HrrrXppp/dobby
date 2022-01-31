@@ -1,4 +1,5 @@
-use crate::traits::{ Process, Parser };
+use core::traits::Process;
+use crate::traits::Parser;
 use core::traits::WorkWithHashMap;
 use core::settings::Settings;
 use crate::router::Router;
@@ -87,15 +88,16 @@ impl <'worker_lf> Worker{
     
         let response = format!("{}{}", status_line, result);
                                     
-        stream.write( response.as_bytes()).unwrap();
+        stream.write_all( response.as_bytes()).unwrap();
         stream.flush().unwrap();
-        stream.shutdown( Shutdown::Both ).expect( "shotdown stream failed" );
+        stream.shutdown( Shutdown::Read );
+        stream.shutdown( Shutdown::Write );
     }
     
     fn get_file_cache( &mut self ) -> &mut FileCache{
         println!( "get_file_cache" );
         match self.file_cache {
-            None => self.file_cache = Some( FileCache::new( &self.settings.get( "file_cache_setting_file_name") ) ),
+            None => panic!("File cache isn't initialized!"),
             _ => {}
         }
         println!( "get_file_cache end" );
@@ -107,6 +109,10 @@ impl <'worker_lf> Worker{
 impl Parser for Worker{}
 
 impl Process for Worker{    
+    fn init( &mut self ) {
+        self.file_cache = Some( FileCache::new( &self.settings.get( "file_cache_setting_file_name") ) );        
+    }
+
     fn run( &mut self ){
         let socket_name = process::id().to_string() + "queue";
         let socket = socket::socket( socket::AddressFamily::Unix,

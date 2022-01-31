@@ -1,7 +1,32 @@
 use std::collections::{ HashMap };
 use std::fs::{ File };
 use std::io::{ BufReader,BufRead };
+use nix::unistd::{fork, ForkResult, Pid};
 
+pub trait Process{
+    fn run( &mut self );
+
+    fn init( &mut self );
+
+    fn create( &mut self ) -> Pid{
+        println!(  "Process: Create>" );
+        match unsafe{ fork() } {
+           Ok(ForkResult::Parent { child, .. }) => {
+               println!("Continuing execution in parent process, new child has pid: {}", child);
+               return child;
+           },
+           Ok(ForkResult::Child) => {
+                println!("I'm a new child process");
+                self.init();
+                self.run();
+                println!("End child process");
+                return Pid::this();
+           },
+           Err(_) => println!("Fork failed"),
+        }
+        return Pid::from_raw( 0 );
+    }
+}
 
 pub trait WorkWithHashMap{
 
