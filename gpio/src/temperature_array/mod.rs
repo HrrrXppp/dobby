@@ -1,5 +1,6 @@
 use core::settings::Settings;
 use core::traits::WorkWithHashMap;
+use core::common_struct::NodeAddress;
 
 extern crate rustc_serialize;
 use rustc_serialize::json;
@@ -19,14 +20,15 @@ struct ResultNode{
 type FuncType = fn( &str ) -> String;
 
 pub struct TemperatureArray {    
-    sensor_vec: Vec<SensorNode>
+    sensor_vec: Vec<SensorNode>,
+    nodes_with_temp_sensor: Vec<NodeAddress>
 }
 
 fn convert( input: String ) -> String {
     let mut final_temp : f32 = -100.0;
     for line_result in input.lines() {
 
-        // ищет подстроку в строке
+        // find substring in string
         if line_result.contains( "t=" ) {
             println!( "line_result: {}", line_result );
             let sub_str = &line_result[ line_result.find( "t=" ).unwrap()+2 .. ];
@@ -54,8 +56,13 @@ impl TemperatureArray {
             Ok( res ) => res,
             _ => panic!( "Can't decode params!" )
         };
+        let another_nodes_with_temp_sensor = temp_setting.get( "another_nodes_with_temperature_sensor" );
+        let nodes_with_temp_sensor_local: Vec<NodeAddress> = match json::decode::<Vec::<NodeAddress>>( &another_nodes_with_temp_sensor ) {
+            Ok( res ) => res,
+            _ => panic!( "Can't decode params!" )
+        };
     
-        return TemperatureArray{ sensor_vec: sensor_vec_local };
+        return TemperatureArray{ sensor_vec: sensor_vec_local, nodes_with_temp_sensor: nodes_with_temp_sensor_local };
     }
 
     pub fn get( &self, func: FuncType ) -> String {
@@ -71,6 +78,10 @@ impl TemperatureArray {
     }
 
     pub fn get_other( &self ) -> String {
+        let len = self.nodes_with_temp_sensor.len();        
+        for i in 0..len as usize {
+            // TODO: Need to add http async request for other nodes
+        }
         return "".to_string();
     }
 }

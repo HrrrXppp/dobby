@@ -1,4 +1,3 @@
-pub mod registry;
 pub mod common_struct;
 pub mod file_cache;
 pub mod settings;

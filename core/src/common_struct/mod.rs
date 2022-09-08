@@ -16,3 +16,10 @@ impl Params {
 }
 
 pub type RunFuncType = fn( &Vec< Params > ) -> String;
+
+#[derive(RustcDecodable, RustcEncodable, Debug)]
+pub struct NodeAddress{
+    address: String,
+    port: u16    
+}
+

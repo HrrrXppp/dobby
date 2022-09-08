@@ -38,7 +38,7 @@ impl CacheNode{
         self.hash = file_name_hash;
         self.load_time = Instant::now();
         unsafe{ self.shared_memory.as_slice_mut().copy_from_slice( value.as_bytes() ) };
-        print!("self.shared_memory.as_slice {}\n", unsafe{ self.shared_memory.to_string() } );
+        print!("self.shared_memory.as_slice {}\n", self.shared_memory.to_string() );
     }
 
     fn get_with_reload( &mut self, file_name_hash: u64, file_name: &str, reload_period: Duration ) -> Option< String > {
@@ -118,7 +118,7 @@ impl CacheNode{
 
     fn get_data( &self ) -> String {
         println!("CacheNode.get_data() self: {:?}", self);
-        let res = unsafe{ self.shared_memory.to_string() };
+        let res = self.shared_memory.to_string();
         println!("End CacheNode.get_data()");
         return res;
     }
